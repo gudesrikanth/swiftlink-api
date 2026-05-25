@@ -23,7 +23,7 @@ jobs:
         ports:
           - 8000:8000
         options: >-
-          --health-cmd "curl -sf http://localhost:8000/shell || exit 1"
+          --health-cmd "curl -s http://localhost:8000/ -o /dev/null"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
