@@ -74,22 +74,22 @@ jobs:
       - name: Push placeholder Lambda image if ECR is empty
         if: github.event.inputs.action == 'apply'
         run: |
+          set -euo pipefail
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REPO="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/swiftlink-prod"
-          IMAGE_COUNT=$(aws ecr describe-images \
-            --repository-name swiftlink-prod \
-            --region ${{ env.AWS_REGION }} \
-            --query 'length(imageDetails)' \
-            --output text 2>/dev/null || echo "0")
-          if [ "$IMAGE_COUNT" = "0" ] || [ "$IMAGE_COUNT" = "None" ] || [ -z "$IMAGE_COUNT" ]; then
-            echo "ECR is empty — pushing placeholder image"
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-              docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-            docker pull --platform linux/amd64 public.ecr.aws/lambda/java:21
-            docker tag public.ecr.aws/lambda/java:21 "${REPO}:latest"
-            docker push "${REPO}:latest"
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          REPO="${REGISTRY}/swiftlink-prod"
+
+          if aws ecr describe-images --repository-name swiftlink-prod \
+              --image-ids imageTag=latest --region ${{ env.AWS_REGION }} \
+              --no-paginate --output text 2>/dev/null; then
+            echo "Image swiftlink-prod:latest already exists — skipping"
           else
-            echo "ECR already has ${IMAGE_COUNT} image(s) — skipping placeholder push"
+            echo "Pushing placeholder image to swiftlink-prod:latest"
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+              docker login --username AWS --password-stdin "$REGISTRY"
+            docker pull ubuntu:22.04
+            docker tag ubuntu:22.04 "${REPO}:latest"
+            docker push "${REPO}:latest"
           fi
 
       - name: Terraform Apply
