@@ -1,3 +1,7 @@
+spring:
+  main:
+    lazy-initialization: true
+
 management:
   metrics:
     export:
