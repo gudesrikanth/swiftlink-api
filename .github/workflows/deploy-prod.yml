@@ -1,0 +1,183 @@
+name: Deploy — Prod
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to promote to prod (e.g. dev-abc1234)'
+        required: true
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: swiftlink-prod
+  LAMBDA_FUNCTION: swiftlink-prod
+  SOURCE_ECR_REPOSITORY: swiftlink-dev
+
+jobs:
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run build when triggered by push (not workflow_dispatch which promotes dev image)
+    if: github.event_name != 'workflow_dispatch'
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        run: ./mvnw package -DskipTests --no-transfer-progress
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "image_tag=prod-${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+            echo "image_tag=prod-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:prod-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  promote-dev-image:
+    name: Promote Dev Image to Prod ECR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      image_tag: ${{ steps.promote.outputs.image_tag }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Re-tag and push
+        id: promote
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          SOURCE="${REGISTRY}/${{ env.SOURCE_ECR_REPOSITORY }}:${{ inputs.image_tag }}"
+          PROD_TAG="prod-promoted-${{ inputs.image_tag }}"
+          TARGET="${REGISTRY}/${{ env.ECR_REPOSITORY }}:${PROD_TAG}"
+
+          docker pull "$SOURCE"
+          docker tag "$SOURCE" "$TARGET"
+          docker push "$TARGET"
+          docker tag "$SOURCE" "${REGISTRY}/${{ env.ECR_REPOSITORY }}:prod-latest"
+          docker push "${REGISTRY}/${{ env.ECR_REPOSITORY }}:prod-latest"
+
+          echo "image_tag=${PROD_TAG}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-push, promote-dev-image]
+    if: always() && (needs.build-and-push.result == 'success' || needs.promote-dev-image.result == 'success')
+    timeout-minutes: 15
+    environment: prod    # requires manual approval in GitHub Environments settings
+
+    steps:
+      - name: Resolve image tag
+        id: resolve
+        run: |
+          TAG="${{ needs.build-and-push.outputs.image_tag || needs.promote-dev-image.outputs.image_tag }}"
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update Lambda image
+        run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.resolve.outputs.image_tag }}"
+          echo "Deploying image: ${IMAGE_URI}"
+          aws lambda update-function-code \
+            --function-name "${{ env.LAMBDA_FUNCTION }}" \
+            --image-uri "$IMAGE_URI" \
+            --architectures x86_64
+
+      - name: Wait for update
+        run: |
+          aws lambda wait function-updated \
+            --function-name "${{ env.LAMBDA_FUNCTION }}"
+
+      - name: Production smoke test
+        run: |
+          API_URL=$(aws apigatewayv2 get-apis --query \
+            "Items[?Name=='${{ env.LAMBDA_FUNCTION }}'].ApiEndpoint | [0]" \
+            --output text)
+
+          echo "Smoke testing production: ${API_URL}/actuator/health"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/actuator/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Production health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS, retrying in 15s..."
+            sleep 15
+          done
+          echo "Production smoke test FAILED"
+          exit 1
+
+      - name: Tag release in git
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Deployed image ${{ steps.resolve.outputs.image_tag }} to production"

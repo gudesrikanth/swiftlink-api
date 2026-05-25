@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: swiftlink-api
+    version: "@project.version@"
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  threads:
+    virtual:
+      enabled: true   # Java 21+ virtual threads for Tomcat
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+    min-response-size: 1024
+  error:
+    include-message: never    # never leak stack traces
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    export:
+      cloudwatch:
+        enabled: false        # enabled by aws profile
+        namespace: SwiftLink
+
+logging:
+  level:
+    com.swiftlink: INFO
+    software.amazon.awssdk: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      dynamodb:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
+  retry:
+    instances:
+      dynamodb:
+        max-attempts: 3
+        wait-duration: 200ms
+        retry-exceptions:
+          - software.amazon.awssdk.core.exception.SdkClientException
+
+swiftlink:
+  base-url: http://localhost:8080
+  short-code-length: 7
+  default-ttl: P365D     # 1 year
+  max-ttl: P3650D        # 10 years
+  dynamo-db:
+    endpoint: ""
+    url-table-name: swiftlink-urls
+    analytics-table-name: swiftlink-analytics
+  rate-limit:
+    requests-per-minute: 60
+    requests-per-hour: 500

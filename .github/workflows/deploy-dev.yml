@@ -1,0 +1,133 @@
+name: Deploy — Dev
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Specific image tag to deploy (leave empty for new build)'
+        required: false
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false  # never cancel an in-flight deploy
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: swiftlink-dev
+  LAMBDA_FUNCTION: swiftlink-dev
+  TF_ENV: dev
+
+jobs:
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR (skip tests — already passed in CI)
+        run: ./mvnw package -DskipTests --no-transfer-progress
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+          echo "image_tag=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  deploy:
+    name: Deploy to Lambda
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    timeout-minutes: 10
+    environment: dev
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update Lambda image
+        run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-push.outputs.image_tag }}"
+          aws lambda update-function-code \
+            --function-name "${{ env.LAMBDA_FUNCTION }}" \
+            --image-uri "$IMAGE_URI" \
+            --architectures x86_64
+
+      - name: Wait for update to complete
+        run: |
+          aws lambda wait function-updated \
+            --function-name "${{ env.LAMBDA_FUNCTION }}"
+
+      - name: Smoke test
+        run: |
+          API_URL=$(aws lambda get-function-url-config \
+            --function-name "${{ env.LAMBDA_FUNCTION }}" \
+            --query 'FunctionUrl' --output text 2>/dev/null || \
+            aws apigatewayv2 get-apis --query \
+            "Items[?Name=='${{ env.LAMBDA_FUNCTION }}'].ApiEndpoint | [0]" \
+            --output text)
+
+          echo "Smoke testing: ${API_URL}/actuator/health"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/actuator/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "Smoke test failed after 5 attempts"
+          exit 1
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "Deploy to dev FAILED — check logs"

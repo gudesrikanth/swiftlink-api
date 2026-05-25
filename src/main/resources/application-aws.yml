@@ -1,0 +1,21 @@
+management:
+  metrics:
+    export:
+      cloudwatch:
+        enabled: true
+        namespace: SwiftLink
+        step: 1m
+
+logging:
+  level:
+    com.swiftlink: INFO
+  pattern:
+    # Structured JSON logging for CloudWatch Insights
+    console: '{"timestamp":"%d{yyyy-MM-dd HH:mm:ss.SSS}","level":"%level","logger":"%logger{36}","thread":"%thread","message":"%message"}%n'
+
+swiftlink:
+  base-url: ${SWIFTLINK_BASE_URL}
+  dynamo-db:
+    endpoint: ""
+    url-table-name: ${SWIFTLINK_URL_TABLE:swiftlink-urls}
+    analytics-table-name: ${SWIFTLINK_ANALYTICS_TABLE:swiftlink-analytics}

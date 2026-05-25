@@ -1,0 +1,5 @@
+aws_region    = "us-east-1"
+owner         = "your-team"
+image_tag     = "prod-v1.0.0"
+custom_domain = "api.yourdomain.com"
+alarm_email   = "oncall@yourcompany.com"

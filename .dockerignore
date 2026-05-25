@@ -1,0 +1,10 @@
+.git
+.gitignore
+.mvn
+target
+*.md
+infra
+.github
+docker-compose*.yml
+.env
+.env.*
