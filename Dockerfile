@@ -1,17 +1,14 @@
 # ─── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM eclipse-temurin:25-jdk AS builder
+FROM maven:3.9.9-eclipse-temurin-25 AS builder
 
 WORKDIR /build
 
 # Copy dependency manifests first for layer caching
 COPY pom.xml .
-COPY .mvn/ .mvn/
-COPY mvnw .
-
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -q
+RUN mvn dependency:go-offline -q
 
 COPY src ./src
-RUN ./mvnw package -DskipTests -q
+RUN mvn package -DskipTests -q
 
 # Extract layers for optimised Docker image
 RUN java -Djarmode=layertools -jar target/*.jar extract --destination target/extracted
