@@ -41,8 +41,8 @@ USER swiftlink
 EXPOSE 8080
 
 ENTRYPOINT ["java", \
-    "-XX:+UseZGC", \
-    "-XX:+ZGenerational", \
+    "-XX:+UseG1GC", \
+    "-XX:InitialRAMPercentage=50.0", \
     "-XX:MaxRAMPercentage=75.0", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "org.springframework.boot.loader.launch.JarLauncher"]
