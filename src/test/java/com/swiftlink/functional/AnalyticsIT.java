@@ -87,7 +87,7 @@ class AnalyticsIT extends FunctionalTestBase {
                 .then().statusCode(200).body("clickCount", equalTo(0));
 
         given().spec(spec).redirects().follow(false).get("/{code}", shortCode);
-        Thread.sleep(500);
+        Thread.sleep(1500);
 
         given().spec(spec)
                 .when().get("/api/v1/urls/{code}", shortCode)

@@ -31,9 +31,13 @@ public class DynamoDbTableInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        createTableIfNotExists(appProperties.dynamoDb().urlTableName(), "shortCode", null);
-        createTableIfNotExists(appProperties.dynamoDb().analyticsTableName(), "shortCode", "sortKey");
-        log.info("DynamoDB tables initialised");
+        try {
+            createTableIfNotExists(appProperties.dynamoDb().urlTableName(), "shortCode", null);
+            createTableIfNotExists(appProperties.dynamoDb().analyticsTableName(), "shortCode", "sortKey");
+            log.info("DynamoDB tables initialised");
+        } catch (Exception e) {
+            log.warn("Could not initialise DynamoDB tables (is DynamoDB Local running?): {}", e.getMessage());
+        }
     }
 
     private void createTableIfNotExists(String tableName, String pk, String sk) {

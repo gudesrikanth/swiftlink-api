@@ -98,7 +98,10 @@ public class UrlShortenerService {
         log.info("Deleted short URL: {}", shortCode);
     }
 
-    @CacheEvict(value = CacheConfig.URL_CACHE, key = "#shortCode")
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.URL_CACHE, key = "#shortCode"),
+        @CacheEvict(value = CacheConfig.URL_CACHE, key = "#shortCode + '-info'")
+    })
     @CircuitBreaker(name = CB_NAME)
     public void recordClick(String shortCode) {
         urlRepository.incrementClickCount(shortCode);

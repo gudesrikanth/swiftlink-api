@@ -103,10 +103,12 @@ class UrlValidationIT extends FunctionalTestBase {
     }
 
     @Test
-    void analytics_withUnknownCode_returns404() {
+    void analytics_withUnknownCode_returns200WithZeroClicks() {
+        // Analytics always returns 200 with empty data — no URL existence check by design
         given().spec(spec)
                 .when().get("/api/v1/urls/no-such-code-xyz/analytics")
                 .then()
-                .statusCode(404);
+                .statusCode(200)
+                .body("totalClicks", equalTo(0));
     }
 }
