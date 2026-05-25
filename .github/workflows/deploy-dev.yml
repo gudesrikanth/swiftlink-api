@@ -175,7 +175,3 @@ jobs:
 
       - name: Run functional tests
         run: bash scripts/test-dev.sh --url "${{ steps.api-url.outputs.url }}"
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          LAMBDA_FUNCTION: ${{ env.LAMBDA_FUNCTION }}
-          LAMBDA_FUNCTION: ${{ env.LAMBDA_FUNCTION }}
