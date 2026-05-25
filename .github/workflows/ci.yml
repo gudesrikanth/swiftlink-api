@@ -28,7 +28,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and test
-        run: ./mvnw verify --no-transfer-progress
+        run: mvn verify --no-transfer-progress
 
       - name: Upload test results
         if: always()
