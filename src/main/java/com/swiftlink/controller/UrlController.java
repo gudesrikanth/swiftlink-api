@@ -13,22 +13,27 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 
-@Slf4j
 @RestController
-@RequiredArgsConstructor
 @Tag(name = "URLs", description = "URL shortening and management")
 public class UrlController {
 
+    private static final Logger log = LoggerFactory.getLogger(UrlController.class);
+
     private final UrlShortenerService urlShortenerService;
     private final AnalyticsService analyticsService;
+
+    public UrlController(UrlShortenerService urlShortenerService, AnalyticsService analyticsService) {
+        this.urlShortenerService = urlShortenerService;
+        this.analyticsService    = analyticsService;
+    }
 
     @PostMapping("/api/v1/urls")
     @Operation(summary = "Create a short URL",
@@ -40,8 +45,7 @@ public class UrlController {
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<CreateUrlResponse> createShortUrl(@Valid @RequestBody CreateUrlRequest request) {
-        var response = urlShortenerService.createShortUrl(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(urlShortenerService.createShortUrl(request));
     }
 
     @GetMapping("/api/v1/urls/{shortCode}")
@@ -64,13 +68,9 @@ public class UrlController {
                     @ApiResponse(responseCode = "404", description = "Short URL not found"),
                     @ApiResponse(responseCode = "410", description = "Short URL has expired")
             })
-    public ResponseEntity<Void> redirect(
-            @PathVariable String shortCode,
-            HttpServletRequest request) {
-
+    public ResponseEntity<Void> redirect(@PathVariable String shortCode, HttpServletRequest request) {
         var mapping = urlShortenerService.resolveUrl(shortCode);
 
-        // Record click asynchronously — never blocks the redirect
         analyticsService.recordClick(
                 shortCode,
                 request.getHeader("Referer"),

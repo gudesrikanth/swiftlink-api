@@ -12,20 +12,18 @@ import com.swiftlink.repository.UrlRepository;
 import com.swiftlink.util.ShortCodeGenerator;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Objects;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class UrlShortenerService {
 
+    private static final Logger log = LoggerFactory.getLogger(UrlShortenerService.class);
     private static final int MAX_GENERATION_ATTEMPTS = 5;
     private static final String CB_NAME = "dynamodb";
 
@@ -33,12 +31,19 @@ public class UrlShortenerService {
     private final ShortCodeGenerator shortCodeGenerator;
     private final AppProperties appProperties;
 
+    public UrlShortenerService(UrlRepository urlRepository,
+                                ShortCodeGenerator shortCodeGenerator,
+                                AppProperties appProperties) {
+        this.urlRepository      = urlRepository;
+        this.shortCodeGenerator = shortCodeGenerator;
+        this.appProperties      = appProperties;
+    }
+
     @CircuitBreaker(name = CB_NAME)
     @Retry(name = CB_NAME)
     public CreateUrlResponse createShortUrl(CreateUrlRequest request) {
         String shortCode = resolveShortCode(request);
         var now = Instant.now();
-        var expiresAt = resolveExpiry(request);
 
         var mapping = UrlMapping.builder()
                 .shortCode(shortCode)
@@ -47,7 +52,7 @@ public class UrlShortenerService {
                 .createdBy(request.createdBy())
                 .createdAt(now)
                 .updatedAt(now)
-                .expiresAt(expiresAt)
+                .expiresAt(resolveExpiry(request))
                 .active(true)
                 .clickCount(0L)
                 .tags(request.tags())
@@ -55,7 +60,6 @@ public class UrlShortenerService {
 
         urlRepository.save(mapping);
         log.info("Created short URL: {} -> {}", shortCode, request.longUrl());
-
         return toCreateResponse(mapping);
     }
 
@@ -68,11 +72,9 @@ public class UrlShortenerService {
         if (!mapping.isActive()) {
             throw new UrlNotFoundException(shortCode);
         }
-
         if (mapping.getExpiresAt() != null && Instant.now().isAfter(mapping.getExpiresAt())) {
             throw new UrlExpiredException(shortCode, mapping.getExpiresAt());
         }
-
         return mapping;
     }
 
@@ -108,7 +110,6 @@ public class UrlShortenerService {
                 return code;
             }
         }
-        // Fallback: generate longer code to reduce collision probability
         return shortCodeGenerator.generate(appProperties.shortCodeLength() + 2);
     }
 

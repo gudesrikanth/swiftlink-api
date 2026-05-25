@@ -3,8 +3,8 @@ package com.swiftlink.service;
 import com.swiftlink.dto.UrlAnalyticsResponse;
 import com.swiftlink.model.ClickEvent;
 import com.swiftlink.repository.AnalyticsRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -14,17 +14,20 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class AnalyticsService {
 
+    private static final Logger log = LoggerFactory.getLogger(AnalyticsService.class);
     private static final int RECENT_CLICKS_LIMIT = 50;
     private static final int ANALYTICS_QUERY_LIMIT = 1000;
     private static final DateTimeFormatter DAY_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
 
     private final AnalyticsRepository analyticsRepository;
+
+    public AnalyticsService(AnalyticsRepository analyticsRepository) {
+        this.analyticsRepository = analyticsRepository;
+    }
 
     @Async
     public void recordClick(String shortCode, String referrer, String userAgent, String ipAddress) {
@@ -60,25 +63,10 @@ public class AnalyticsService {
                         e -> DAY_FORMAT.format(e.getClickedAt()),
                         Collectors.counting()));
 
-        var topReferrers = topN(events.stream()
-                .map(ClickEvent::getReferrer)
-                .filter(Objects::nonNull)
-                .toList());
-
-        var topCountries = topN(events.stream()
-                .map(ClickEvent::getCountry)
-                .filter(Objects::nonNull)
-                .toList());
-
-        var topBrowsers = topN(events.stream()
-                .map(ClickEvent::getBrowser)
-                .filter(Objects::nonNull)
-                .toList());
-
-        var topDevices = topN(events.stream()
-                .map(ClickEvent::getDevice)
-                .filter(Objects::nonNull)
-                .toList());
+        var topReferrers = topN(events.stream().map(ClickEvent::getReferrer).filter(Objects::nonNull).toList());
+        var topCountries = topN(events.stream().map(ClickEvent::getCountry).filter(Objects::nonNull).toList());
+        var topBrowsers  = topN(events.stream().map(ClickEvent::getBrowser).filter(Objects::nonNull).toList());
+        var topDevices   = topN(events.stream().map(ClickEvent::getDevice).filter(Objects::nonNull).toList());
 
         var recentClicks = events.stream()
                 .limit(RECENT_CLICKS_LIMIT)
@@ -97,12 +85,7 @@ public class AnalyticsService {
                 events.size(),
                 sorted.isEmpty() ? null : sorted.getFirst(),
                 sorted.isEmpty() ? null : sorted.getLast(),
-                clicksByDay,
-                topReferrers,
-                topCountries,
-                topBrowsers,
-                topDevices,
-                recentClicks);
+                clicksByDay, topReferrers, topCountries, topBrowsers, topDevices, recentClicks);
     }
 
     private Map<String, Long> topN(List<String> values) {
@@ -124,10 +107,10 @@ public class AnalyticsService {
 
     private String detectBrowser(String ua) {
         if (ua == null) return "Unknown";
-        if (ua.contains("Edg/")) return "Edge";
-        if (ua.contains("Chrome")) return "Chrome";
+        if (ua.contains("Edg/"))    return "Edge";
+        if (ua.contains("Chrome"))  return "Chrome";
         if (ua.contains("Firefox")) return "Firefox";
-        if (ua.contains("Safari")) return "Safari";
+        if (ua.contains("Safari"))  return "Safari";
         if (ua.contains("Opera") || ua.contains("OPR")) return "Opera";
         return "Other";
     }

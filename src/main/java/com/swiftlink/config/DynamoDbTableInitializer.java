@@ -1,31 +1,33 @@
 package com.swiftlink.config;
 
-import com.swiftlink.model.ClickEvent;
-import com.swiftlink.model.UrlMapping;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
-import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Auto-creates DynamoDB tables on startup when running locally.
  * In AWS, tables are managed by Terraform.
  */
-@Slf4j
 @Component
 @Profile("local")
-@RequiredArgsConstructor
 public class DynamoDbTableInitializer implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DynamoDbTableInitializer.class);
 
     private final DynamoDbClient dynamoDbClient;
     private final AppProperties appProperties;
+
+    public DynamoDbTableInitializer(DynamoDbClient dynamoDbClient, AppProperties appProperties) {
+        this.dynamoDbClient = dynamoDbClient;
+        this.appProperties  = appProperties;
+    }
 
     @Override
     public void run(String... args) {
@@ -39,8 +41,8 @@ public class DynamoDbTableInitializer implements CommandLineRunner {
             dynamoDbClient.describeTable(r -> r.tableName(tableName));
             log.debug("Table {} already exists", tableName);
         } catch (ResourceNotFoundException ex) {
-            var attrs = new java.util.ArrayList<AttributeDefinition>();
-            var keySchema = new java.util.ArrayList<KeySchemaElement>();
+            var attrs    = new ArrayList<AttributeDefinition>();
+            var keySchema = new ArrayList<KeySchemaElement>();
 
             attrs.add(AttributeDefinition.builder().attributeName(pk).attributeType(ScalarAttributeType.S).build());
             keySchema.add(KeySchemaElement.builder().attributeName(pk).keyType(KeyType.HASH).build());

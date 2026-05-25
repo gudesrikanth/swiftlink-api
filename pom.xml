@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.1</version>
+        <version>3.5.3</version>
         <relativePath/>
     </parent>
 
@@ -28,7 +28,6 @@
         <aws-sdk.version>2.29.14</aws-sdk.version>
         <springdoc.version>2.7.0</springdoc.version>
         <resilience4j.version>2.2.0</resilience4j.version>
-<lombok.version>1.18.36</lombok.version>
         <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
@@ -112,14 +111,6 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- Lombok -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <optional>true</optional>
-        </dependency>
-
         <!-- Caffeine cache (local/in-process cache) -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -157,12 +148,6 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
                     <layers>
                         <enabled>true</enabled>
                     </layers>
@@ -173,17 +158,9 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>25</release>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.springframework.boot</groupId>
-                            <artifactId>spring-boot-configuration-processor</artifactId>
-                        </path>
-                    </annotationProcessorPaths>
+                    <!-- No annotation processors — Lombok is removed; config-processor
+                         uses internal javac APIs incompatible with Java 25 -->
+                    <proc>none</proc>
                 </configuration>
             </plugin>
             <plugin>
