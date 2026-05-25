@@ -2,7 +2,7 @@ name: Deploy — Dev
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, main, master]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -51,6 +51,16 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repository if it doesn't exist
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws ecr create-repository \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --region ${{ env.AWS_REGION }} \
+        --encryption-configuration encryptionType=AES256 \
+            --image-scanning-configuration "scanOnPush=true"
 
       - name: Generate image tag
         id: meta
