@@ -1,12 +1,12 @@
 terraform {
   backend "s3" {
-    # All values are injected at `terraform init` time via -backend-config flags.
-    # See infra-prod.yml workflow, or run locally:
-    #
+    key     = "swiftlink/prod/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+    # bucket and dynamodb_table are injected via -backend-config at init time.
+    # See infra-prod.yml, or run locally:
     #   terraform init \
     #     -backend-config="bucket=<TF_STATE_BUCKET>" \
-    #     -backend-config="key=swiftlink/prod/terraform.tfstate" \
-    #     -backend-config="region=us-east-1" \
     #     -backend-config="dynamodb_table=<TF_LOCK_TABLE>"
   }
 }

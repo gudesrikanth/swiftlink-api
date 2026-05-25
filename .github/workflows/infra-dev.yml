@@ -43,13 +43,19 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.TF_STATE_BUCKET }}" ] || [ -z "${{ secrets.TF_LOCK_TABLE }}" ]; then
+            echo "ERROR: TF_STATE_BUCKET and TF_LOCK_TABLE secrets must be set."
+            echo "Run the 'Infra — Bootstrap' workflow first, then add those secrets."
+            exit 1
+          fi
+
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=swiftlink/dev/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
 
       - name: Terraform Validate
