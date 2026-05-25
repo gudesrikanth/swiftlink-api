@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -85,7 +86,10 @@ public class UrlShortenerService {
         return toInfoResponse(mapping);
     }
 
-    @CacheEvict(value = CacheConfig.URL_CACHE, key = "#shortCode")
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.URL_CACHE, key = "#shortCode"),
+        @CacheEvict(value = CacheConfig.URL_CACHE, key = "#shortCode + '-info'")
+    })
     public void deleteUrl(String shortCode) {
         if (!urlRepository.existsByShortCode(shortCode)) {
             throw new UrlNotFoundException(shortCode);
