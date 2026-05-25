@@ -28,8 +28,7 @@
         <aws-sdk.version>2.29.14</aws-sdk.version>
         <springdoc.version>2.7.0</springdoc.version>
         <resilience4j.version>2.2.0</resilience4j.version>
-        <mapstruct.version>1.6.3</mapstruct.version>
-        <lombok.version>1.18.36</lombok.version>
+<lombok.version>1.18.36</lombok.version>
         <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
@@ -113,13 +112,6 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- MapStruct -->
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
-
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -186,11 +178,6 @@
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
                             <version>${lombok.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.mapstruct</groupId>
-                            <artifactId>mapstruct-processor</artifactId>
-                            <version>${mapstruct.version}</version>
                         </path>
                         <path>
                             <groupId>org.springframework.boot</groupId>
