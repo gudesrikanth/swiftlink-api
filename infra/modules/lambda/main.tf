@@ -78,7 +78,7 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
   metric_name         = "Duration"
   namespace           = "AWS/Lambda"
   period              = 60
-  statistic           = "p95"
+  extended_statistic  = "p95"
   threshold           = var.duration_alarm_ms
   alarm_description   = "Lambda p95 duration exceeded"
   treat_missing_data  = "notBreaching"
