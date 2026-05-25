@@ -73,13 +73,14 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:prod-latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
+          provenance: false
+          sbom: false
 
   promote-dev-image:
     name: Promote Dev Image to Prod ECR
