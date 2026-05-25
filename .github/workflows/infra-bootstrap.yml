@@ -1,0 +1,51 @@
+name: Infra — Bootstrap (run once)
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: '1.9.0'
+
+jobs:
+  bootstrap:
+    name: Bootstrap Terraform State Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init (local state — bootstrap only)
+        working-directory: infra/bootstrap
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/bootstrap
+        run: terraform apply -auto-approve -var="aws_region=${{ env.AWS_REGION }}"
+
+      - name: Print outputs
+        working-directory: infra/bootstrap
+        run: |
+          echo ""
+          echo "════════════════════════════════════════════════"
+          echo "  Bootstrap complete — add these GitHub Secrets:"
+          echo "════════════════════════════════════════════════"
+          echo "  TF_STATE_BUCKET = $(terraform output -raw state_bucket_name)"
+          echo "  TF_LOCK_TABLE   = $(terraform output -raw lock_table_name)"
+          echo "════════════════════════════════════════════════"
+          echo ""
+          echo "Then run the infra-dev and infra-prod workflows."
