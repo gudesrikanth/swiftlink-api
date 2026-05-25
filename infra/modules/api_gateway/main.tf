@@ -28,7 +28,7 @@ resource "aws_apigatewayv2_stage" "this" {
       status         = "$context.status"
       protocol       = "$context.protocol"
       responseLength = "$context.responseLength"
-      responseTime   = "$context.responseTime"
+      requestTime    = "$context.requestTime"
     })
   }
 
