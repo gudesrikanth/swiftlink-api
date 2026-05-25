@@ -66,10 +66,36 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -out=tfplan
 
+      - name: Bootstrap ECR (first-time only)
+        if: github.event.inputs.action == 'apply'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -target=module.ecr -auto-approve
+
+      - name: Push placeholder Lambda image if ECR is empty
+        if: github.event.inputs.action == 'apply'
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REPO="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/swiftlink-dev"
+          IMAGE_COUNT=$(aws ecr describe-images \
+            --repository-name swiftlink-dev \
+            --region ${{ env.AWS_REGION }} \
+            --query 'length(imageDetails)' \
+            --output text 2>/dev/null || echo "0")
+          if [ "$IMAGE_COUNT" = "0" ] || [ "$IMAGE_COUNT" = "None" ] || [ -z "$IMAGE_COUNT" ]; then
+            echo "ECR is empty — pushing placeholder image"
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+              docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+            docker pull --platform linux/amd64 public.ecr.aws/lambda/java:21
+            docker tag public.ecr.aws/lambda/java:21 "${REPO}:latest"
+            docker push "${REPO}:latest"
+          else
+            echo "ECR already has ${IMAGE_COUNT} image(s) — skipping placeholder push"
+          fi
+
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply tfplan
+        run: terraform apply -auto-approve
 
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
